@@ -28,11 +28,18 @@ qt_add_qml_module(${PROJECT_BINARY_NAME}
     VERSION 1.0
     QML_FILES
         qml/Main.qml
+        qml/GeoTiffOverlay.qml
+        qml/TransformedGeoTiffOverlay.qml
+        qml/MatrixTransformedGeoTiffOverlay.qml
     SOURCES
         src/geotiffhandler.h
         src/geotiffhandler.cpp
         src/geotiffimageprovider.h
         src/geotiffimageprovider.cpp
+        src/geotransformhandler.h
+        src/geotransformhandler.cpp
+        src/geotiffmatrix.h
+        src/geotiffmatrix.cpp
         src/appconfig.h
         src/appconfig.cpp
         src/thunderforestconfigserver.h

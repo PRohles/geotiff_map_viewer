@@ -1,4 +1,6 @@
 #include "geotiffhandler.h"
+#include "geotransformhandler.h"
+#include "geotiffmatrix.h"
 #include <QCoreApplication>
 #include <QFileInfo>
 #include <QDir>
@@ -158,6 +160,21 @@ void GeoTiffHandler::extractMetadata()
         m_boundsMaxX = QString::number(maxX, 'f', 6);
         m_boundsMaxY = QString::number(maxY, 'f', 6);
         emit boundsChanged();
+        
+        // Update the GeoTransformHandler with the GDAL geotransform coefficients
+        GeoTransformHandler::instance()->updateTransformFromGDAL(
+            geoTransform[0], geoTransform[3],  // Origin X, Y
+            geoTransform[1], geoTransform[5],  // Pixel width/height
+            geoTransform[2], geoTransform[4],  // Rotation X, Y
+            width, height                       // Image dimensions
+        );
+        
+        // Also update the GeoTiffMatrix class
+        QList<double> coeffs;
+        for (int i = 0; i < 6; ++i) {
+            coeffs.append(geoTransform[i]);
+        }
+        GeoTiffMatrix::instance()->setGeoTransform(coeffs, width, height);
     } else {
         m_boundsMinX = "Unknown";
         m_boundsMinY = "Unknown";

@@ -15,11 +15,48 @@ ApplicationWindow {
     title: qsTr("GeoTIFF Viewer")
 
     function loadTiff(url) {
-        image.source = "image://geotiff/" + url;
-        console.log("set image.source to " + image.source)
+        // Load GeoTIFF metadata first to populate geotransform data
         GeoTiffHandler.loadMetadata(url)
-        tiffImgMQI.coordinate = QtPositioning.coordinate(GeoTiffHandler.boundsMaxY, GeoTiffHandler.boundsMinX)
-        imgZoomLevelChoice.value = 140;
+        
+        // Set the overlay mode based on radio button selection
+        if (basicOverlayRadio.checked) {
+            // Legacy simple overlay
+            basicTiffOverlay.visible = true
+            transformedTiffOverlay.visible = false
+            matrixTiffOverlay.visible = false
+            
+            basicImage.source = "image://geotiff/" + url
+            basicTiffOverlay.coordinate = QtPositioning.coordinate(
+                parseFloat(GeoTiffHandler.boundsMaxY),
+                parseFloat(GeoTiffHandler.boundsMinX)
+            )
+            basicTiffOverlay.zoomLevel = imgZoomLevelChoice.value/10
+        } 
+        else if (transformedOverlayRadio.checked) {
+            // Transformed overlay
+            basicTiffOverlay.visible = false
+            transformedTiffOverlay.visible = true
+            matrixTiffOverlay.visible = false
+            
+            transformedTiffOverlay.loadGeoTiff(url)
+        }
+        else {
+            // Matrix-transformed overlay (most accurate)
+            basicTiffOverlay.visible = false
+            transformedTiffOverlay.visible = false
+            matrixTiffOverlay.visible = true
+            
+            matrixTiffOverlay.loadGeoTiff(url)
+        }
+        
+        // Center map on GeoTIFF
+        mapBase.center = QtPositioning.coordinate(
+            (parseFloat(GeoTiffHandler.boundsMaxY) + parseFloat(GeoTiffHandler.boundsMinY)) / 2.0,
+            (parseFloat(GeoTiffHandler.boundsMaxX) + parseFloat(GeoTiffHandler.boundsMinX)) / 2.0
+        )
+        
+        // Set an appropriate zoom level
+        mapBase.zoomLevel = 15  // You may want to calculate this based on image bounds
     }
 
     Component.onCompleted: loadTiff("file:///home/kyzik/Build/l3h-insight/austro-hungarian-maps/sheets_geo/2868_000_geo.tif")
@@ -80,12 +117,32 @@ ApplicationWindow {
                     id: imgZoomLevelChoice
                     from: 10
                     to: 200
+                    value: 140
                     // stepSize: 5
                     WheelHandler { onWheel: (wheel) => { if(wheel.angleDelta.y > 0) imgZoomLevelChoice.increase(); else imgZoomLevelChoice.decrease() } }
                     hoverEnabled: true
                     ToolTip.text: "Set the map zoomlevel at which the image is shown at 100% scale"
                     ToolTip.visible: hovered
                     ToolTip.delay: Application.styleHints.mousePressAndHoldInterval
+                }
+                
+                // Overlay type selection
+                RadioButton {
+                    id: basicOverlayRadio
+                    text: "Basic"
+                    checked: false
+                }
+                
+                RadioButton {
+                    id: transformedOverlayRadio
+                    text: "Transformed"
+                    checked: false
+                }
+                
+                RadioButton {
+                    id: matrixOverlayRadio
+                    text: "Matrix"
+                    checked: true
                 }
 
                 Label {
@@ -191,14 +248,32 @@ ApplicationWindow {
                     fieldOfView: mapBase.fieldOfView
                     z: mapBase.z + 1
 
+                    // Basic GeoTIFF overlay (legacy)
                     MapQuickItem {
-                        id: tiffImgMQI
+                        id: basicTiffOverlay
+                        visible: false
                         sourceItem: Image {
-                            id: image
+                            id: basicImage
                         }
                         coordinate: QtPositioning.coordinate(0, 0)
-                        anchorPoint: Qt.point(0,0)//image.width,image.height)
+                        anchorPoint: Qt.point(0, 0)
                         zoomLevel: imgZoomLevelChoice.value/10
+                        opacity: (imgOpacityChoice.value*1.0)/100
+                    }
+                    
+                    // Transformed overlay
+                    TransformedGeoTiffOverlay {
+                        id: transformedTiffOverlay
+                        visible: false
+                        map: mapBase
+                        opacity: (imgOpacityChoice.value*1.0)/100
+                    }
+                    
+                    // Matrix-transformed overlay (most accurate)
+                    MatrixTransformedGeoTiffOverlay {
+                        id: matrixTiffOverlay
+                        visible: true
+                        map: mapBase
                         opacity: (imgOpacityChoice.value*1.0)/100
                     }
                 }
@@ -300,6 +375,31 @@ ApplicationWindow {
                         }
                     }
 
+                    GroupBox {
+                        Layout.fillWidth: true
+                        title: "Georeferencing Mode"
+
+                        ColumnLayout {
+                            anchors.fill: parent
+
+                            Label {
+                                text: "<b>Current Mode:</b> " + (basicOverlayRadio.checked ? "Basic (Simple Overlay)" : 
+                                                            transformedOverlayRadio.checked ? "Transformed (Affine Transform)" : 
+                                                            "Matrix (Full Georeference)")
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+
+                            Label {
+                                text: "<b>Description:</b> " + (basicOverlayRadio.checked ? "Places image at top-left coordinate with manual zoom" : 
+                                                           transformedOverlayRadio.checked ? "Applies transformation based on image corners" : 
+                                                           "Applies full matrix transformation from GDAL geotransform")
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                        }
+                    }
+                    
                     GroupBox {
                         Layout.fillWidth: true
                         Layout.preferredHeight: bandsInfoLV.height + implicitLabelHeight + verticalPadding
