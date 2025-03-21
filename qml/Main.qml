@@ -14,17 +14,27 @@ ApplicationWindow {
     visible: true
     title: qsTr("GeoTIFF Viewer")
 
+        // Store current file URL for reloading when radio buttons change
+    property string currentTiffUrl: ""
+
     function loadTiff(url) {
+        // Store the URL for later use
+        currentTiffUrl = url;
+        console.log("Loading TIFF: " + url);
+        
         // Load GeoTIFF metadata first to populate geotransform data
         GeoTiffHandler.loadMetadata(url)
         
         // Set the overlay mode based on radio button selection
         if (basicOverlayRadio.checked) {
-            // Legacy simple overlay
+            console.log("Using Basic overlay mode");
+            
+            // Hide other overlays
             basicTiffOverlay.visible = true
             transformedTiffOverlay.visible = false
             matrixTiffOverlay.visible = false
             
+            // Set up basic overlay
             basicImage.source = "image://geotiff/" + url
             basicTiffOverlay.coordinate = QtPositioning.coordinate(
                 parseFloat(GeoTiffHandler.boundsMaxY),
@@ -33,19 +43,27 @@ ApplicationWindow {
             basicTiffOverlay.zoomLevel = imgZoomLevelChoice.value/10
         } 
         else if (transformedOverlayRadio.checked) {
-            // Transformed overlay
+            console.log("Using Transformed overlay mode");
+            
+            // Hide other overlays
             basicTiffOverlay.visible = false
             transformedTiffOverlay.visible = true
             matrixTiffOverlay.visible = false
             
+            // Set up transformed overlay
+            transformedTiffOverlay.zoomLevel = imgZoomLevelChoice.value/10
             transformedTiffOverlay.loadGeoTiff(url)
         }
         else {
-            // Matrix-transformed overlay (most accurate)
+            console.log("Using Matrix overlay mode");
+            
+            // Hide other overlays
             basicTiffOverlay.visible = false
             transformedTiffOverlay.visible = false
             matrixTiffOverlay.visible = true
             
+            // Set up matrix overlay
+            matrixTiffOverlay.zoomLevel = imgZoomLevelChoice.value/10
             matrixTiffOverlay.loadGeoTiff(url)
         }
         
@@ -59,7 +77,34 @@ ApplicationWindow {
         mapBase.zoomLevel = 15  // You may want to calculate this based on image bounds
     }
 
-    Component.onCompleted: loadTiff("file:///home/kyzik/Build/l3h-insight/austro-hungarian-maps/sheets_geo/2868_000_geo.tif")
+    // Button group for radio buttons
+    ButtonGroup {
+        id: overlayTypeGroup
+        buttons: [basicOverlayRadio, transformedOverlayRadio, matrixOverlayRadio]
+    }
+    
+    Component.onCompleted: {
+        // Make sure the initial GeoTIFF path is properly formatted and exists
+        // Use a path that's likely to exist on your system, for example in the application directory
+        var initialTiffPath = "file:///tmp/test.tif";
+        // Alternatively, you can set this to a relative path in your file system
+        
+        console.log("Initial GeoTIFF path: " + initialTiffPath);
+
+        // For debugging - check which QML components are loaded
+        console.log("Basic overlay is visible: " + basicTiffOverlay.visible);
+        console.log("Transformed overlay is visible: " + transformedTiffOverlay.visible);
+        console.log("Matrix overlay is visible: " + matrixTiffOverlay.visible);
+
+        // Set the default overlay mode
+        matrixOverlayRadio.checked = true;
+
+        // Load the initial GeoTIFF - uncomment when you have a valid path
+        // loadTiff(initialTiffPath);
+        
+        // For testing, tell the user to select a file
+        fileDialog.open();
+    }
 
     Plugin {
         id: mapPlugin
@@ -111,6 +156,13 @@ ApplicationWindow {
                     ToolTip.text: "Set opacity of image"
                     ToolTip.visible: hovered
                     ToolTip.delay: Application.styleHints.mousePressAndHoldInterval
+                    
+                    onValueChanged: {
+                        // Update opacity on all overlays
+                        basicTiffOverlay.opacity = value / 100.0;
+                        transformedTiffOverlay.opacity = value / 100.0;
+                        matrixTiffOverlay.opacity = value / 100.0;
+                    }
                 }
 
                 SpinBox {
@@ -124,6 +176,13 @@ ApplicationWindow {
                     ToolTip.text: "Set the map zoomlevel at which the image is shown at 100% scale"
                     ToolTip.visible: hovered
                     ToolTip.delay: Application.styleHints.mousePressAndHoldInterval
+                    
+                    onValueChanged: {
+                        // Update zoom level on all overlays
+                        basicTiffOverlay.zoomLevel = value / 10.0;
+                        transformedTiffOverlay.zoomLevel = value / 10.0;
+                        matrixTiffOverlay.zoomLevel = value / 10.0;
+                    }
                 }
                 
                 // Overlay type selection
@@ -131,18 +190,36 @@ ApplicationWindow {
                     id: basicOverlayRadio
                     text: "Basic"
                     checked: false
+                    onCheckedChanged: {
+                        if (checked && currentTiffUrl) {
+                            console.log("Switching to Basic Mode");
+                            loadTiff(currentTiffUrl);
+                        }
+                    }
                 }
                 
                 RadioButton {
                     id: transformedOverlayRadio
                     text: "Transformed"
                     checked: false
+                    onCheckedChanged: {
+                        if (checked && currentTiffUrl) {
+                            console.log("Switching to Transformed Mode");
+                            loadTiff(currentTiffUrl);
+                        }
+                    }
                 }
                 
                 RadioButton {
                     id: matrixOverlayRadio
                     text: "Matrix"
                     checked: true
+                    onCheckedChanged: {
+                        if (checked && currentTiffUrl) {
+                            console.log("Switching to Matrix Mode");
+                            loadTiff(currentTiffUrl);
+                        }
+                    }
                 }
 
                 Label {
@@ -254,6 +331,7 @@ ApplicationWindow {
                         visible: false
                         sourceItem: Image {
                             id: basicImage
+                            cache: false
                         }
                         coordinate: QtPositioning.coordinate(0, 0)
                         anchorPoint: Qt.point(0, 0)
@@ -444,6 +522,7 @@ ApplicationWindow {
         nameFilters: ["GeoTIFF files (*.tif *.tiff)", "All files (*)"]
 
         onAccepted: {
+            console.log("FileDialog accepted: " + fileDialog.selectedFile);
             loadTiff(fileDialog.selectedFile);
         }
     }

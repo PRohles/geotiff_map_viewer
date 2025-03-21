@@ -87,12 +87,13 @@ GDALDataset *GeoTiffHandler::openGeoTiff(const QUrl &fileUrl)
     m_statusMessage = "Loading " + m_fileName + "...";
     emit statusMessageChanged();
 
-    // Open GeoTIFF file with GDAL public API
+    // Load GeoTIFF file with GDAL public API
     CPLSetConfigOption("GDAL_PAM_ENABLED", "NO");
     GDALDataset *dataset = static_cast<GDALDataset*>(GDALOpen(filePath.toUtf8().constData(), GA_ReadOnly));
 
     if (!dataset) {
-        m_statusMessage = "Failed to open GeoTIFF file";
+        m_statusMessage = "Failed to open GeoTIFF file: " + filePath;
+        qWarning() << m_statusMessage;
         emit statusMessageChanged();
         return nullptr;
     }
